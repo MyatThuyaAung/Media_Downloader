@@ -1,17 +1,83 @@
-# media_downloader
+<div align="center">
 
-A new Flutter project.
+# Media Downloader
 
-## Getting Started
+A modern cross-platform media downloader powered by Flutter, yt-dlp, and FFmpeg.
 
-This project is a starting point for a Flutter application.
+[Features](#features) •
+[Installation](#installation) •
+[Roadmap](#roadmap)
 
-A few resources to get you started if this is your first Flutter project:
+</div>
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
+---
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+## Overview
+
+Media Downloader is a desktop application for downloading videos, audio, playlists, and subtitles from supported platforms through a clean and modern user interface.
+
+Built with Flutter and powered by yt-dlp and FFmpeg.
+
+## Features
+
+### Current
+
+- Video metadata retrieval
+- Modern Material 3 interface
+- Windows desktop support
+- Riverpod state management
+- Modular architecture
+
+### Planned
+
+- Video downloads
+- Audio extraction
+- Playlist downloads
+- Subtitle downloads
+- Format selection
+- Download queue
+- Download prioritization
+- Download history
+- Linux support
+
+## Screenshots
+
+Coming soon.
+
+## Installation
+
+### Requirements
+
+- Flutter
+- yt-dlp
+- FFmpeg
+
+### Run
+
+```bash
+fvm flutter pub get
+fvm flutter run -d windows
+```
+
+## Roadmap
+
+- [x] Project foundation
+- [x] Metadata retrieval
+- [ ] Download engine
+- [ ] Format selection
+- [ ] Queue management
+- [ ] Playlist support
+- [ ] Subtitle support
+- [ ] Linux release
+
+## Tech Stack
+
+- Flutter
+- Riverpod
+- GoRouter
+- yt-dlp
+- FFmpeg
+
+## License
+
+MIT
