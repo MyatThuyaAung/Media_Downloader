@@ -23,18 +23,16 @@ Built with Flutter and powered by yt-dlp and FFmpeg.
 ### Current
 
 - Video metadata retrieval
-- Modern Material 3 interface
 - Windows desktop support
-- Riverpod state management
 - Modular architecture
+- Video downloads
+- Audio extraction
+- Format selection
 
 ### Planned
 
-- Video downloads
-- Audio extraction
 - Playlist downloads
 - Subtitle downloads
-- Format selection
 - Download queue
 - Download prioritization
 - Download history
@@ -63,8 +61,8 @@ fvm flutter run -d windows
 
 - [x] Project foundation
 - [x] Metadata retrieval
-- [ ] Download engine
-- [ ] Format selection
+- [x] Download engine
+- [x] Format selection
 - [ ] Queue management
 - [ ] Playlist support
 - [ ] Subtitle support
