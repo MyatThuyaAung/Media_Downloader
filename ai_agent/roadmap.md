@@ -1,4 +1,4 @@
-Last updated: 2026-06-04 21:44:14 +06:30
+Last updated: 2026-06-08 00:09:04 +06:30
 
 # Roadmap
 
@@ -14,28 +14,22 @@ Modern UI, robust queue, format selection, real-time progress tracking.
 - VideoInfo model + basic card UI
 - window_manager setup
 
-### 🔥 M1 — Core Feature Integration (CURRENT)
-Goal: Working end-to-end download with format selection and real progress.
+### ✅ M1 — Core Feature Integration (DONE)
+- End-to-end download with format selection and real progress
+- Dark Material3 UI with sidebar
+- UTF-8 encoding + cookies auth
 
-1. Fix HomeState copyWith bug (error not preserved)
-2. Platform-aware executable path (Windows/Linux)
-3. Format extraction (`yt-dlp -J` → formats array)
-4. Format selection UI (dropdown/list)
-5. Download service (yt-dlp -f FORMAT -o OUTPUT URL)
-6. Progress tracking (parse stdout → progress bar)
-7. UI polish: dark theme, network thumbnail, remove debug text
+### ✅ M2 — Queue System (DONE)
+- Sequential download queue with pause/resume
+- Multi-process network + post-processing decoupling
+- Phase-aware progress, multi-pass detection, badge
+- Subtitle download (no embed) with correct phase tracking
 
-### 🔲 M2 — Queue System
-- DownloadQueue model (list of DownloadTask)
-- downloadQueueProvider (Riverpod list state)
-- Add/remove/reorder tasks
-- Status: queued → downloading → done/error
-- Queue screen (downloads feature)
-
-### 🔲 M3 — History & Settings
+### ✅ M3 — History & Settings (DONE)
 - Persist completed downloads (local storage)
 - History screen
-- Settings screen: default output folder, default format
+- Settings screen: default output folder, default subtitles
+- Queue state persistence across restarts
 
 ### 🔲 M4 — Linux Support
 - Platform detection utility

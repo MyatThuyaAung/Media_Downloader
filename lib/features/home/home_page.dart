@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-import '../../models/download_progress.dart';
-import '../../models/video_format.dart';
-import '../../widgets/video_info_card.dart';
+import '../../models/download_task.dart';
+import '../../widgets/app_sidebar.dart';
+import '../../widgets/video_download_tile.dart';
+import '../downloads/download_queue_provider.dart';
 import 'home_provider.dart';
 
 class HomePage extends ConsumerWidget {
@@ -12,16 +13,20 @@ class HomePage extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(homeProvider);
+    final queueState = ref.watch(downloadQueueProvider);
     final notifier = ref.read(homeProvider.notifier);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
+
+    final activeCount =
+        queueState.tasks.where((t) => t.status != DownloadTaskStatus.done).length;
 
     return Scaffold(
       backgroundColor: colors.surface,
       body: Row(
         children: [
           // ── Left sidebar ────────────────────────────────────────────────
-          _Sidebar(colors: colors),
+          AppSidebar(colors: colors, queuedCount: activeCount),
 
           // ── Main content ─────────────────────────────────────────────────
           Expanded(
@@ -88,28 +93,32 @@ class HomePage extends ConsumerWidget {
                             ),
                           ),
 
-                        // ── Video info card ─────────────────────────────
-                        if (state.videoInfo != null && !state.isLoading) ...[
-                          VideoInfoCard(videoInfo: state.videoInfo!),
-
-                          const SizedBox(height: 20),
-
-                          // ── Format + Download section ───────────────
-                          if (state.videoInfo!.formats.isNotEmpty)
-                            _FormatDownloadSection(
-                              formats: state.videoInfo!.formats,
-                              selectedFormat: state.selectedFormat,
-                              isDownloading: state.isDownloading,
-                              progress: state.downloadProgress,
-                              colors: colors,
-                              theme: theme,
-                              onFormatChanged: notifier.selectFormat,
-                              onDownload: state.isDownloading
-                                  ? null
-                                  : notifier.startDownload,
-                              onCancel: notifier.cancelDownload,
-                            ),
-                        ],
+                        // ── Video tile with integrated download controls ──
+                        if (state.videoInfo != null && !state.isLoading)
+                          VideoDownloadTile(
+                            video: state.videoInfo!,
+                            initialFormat: state.videoInfo!.formats.isNotEmpty
+                                ? state.videoInfo!.formats.first
+                                : null,
+                            initialSubtitleLang: state.subtitleLang,
+                            onDownload: (video, format, subtitleLang) {
+                              notifier.startDownload(
+                                video: video,
+                                format: format,
+                                subtitleLang: subtitleLang,
+                              );
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: const Text('Added to download queue!'),
+                                  behavior: SnackBarBehavior.floating,
+                                  duration: const Duration(seconds: 2),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
                       ],
                     ),
                   ),
@@ -123,85 +132,7 @@ class HomePage extends ConsumerWidget {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Sidebar
-// ──────────────────────────────────────────────────────────────────────────────
 
-class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.colors});
-  final ColorScheme colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: 72,
-      color: colors.surfaceContainerHighest,
-      child: Column(
-        children: [
-          const SizedBox(height: 20),
-          // App icon / logo
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [colors.primary, colors.tertiary],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Icon(Icons.download_rounded,
-                color: colors.onPrimary, size: 24),
-          ),
-          const SizedBox(height: 32),
-          _SidebarIcon(icon: Icons.home_rounded, active: true, colors: colors),
-          _SidebarIcon(icon: Icons.queue_play_next_rounded, colors: colors),
-          _SidebarIcon(icon: Icons.history_rounded, colors: colors),
-          const Spacer(),
-          _SidebarIcon(icon: Icons.settings_rounded, colors: colors),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarIcon extends StatelessWidget {
-  const _SidebarIcon({
-    required this.icon,
-    this.active = false,
-    required this.colors,
-  });
-  final IconData icon;
-  final bool active;
-  final ColorScheme colors;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 6),
-      child: Tooltip(
-        message: '',
-        child: Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: active
-                ? colors.primary.withOpacity(0.15)
-                : Colors.transparent,
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: Icon(
-            icon,
-            color: active ? colors.primary : colors.onSurfaceVariant,
-            size: 22,
-          ),
-        ),
-      ),
-    );
-  }
-}
 
 // ──────────────────────────────────────────────────────────────────────────────
 // Top bar
@@ -327,7 +258,7 @@ class _UrlInputCardState extends State<_UrlInputCard> {
                   decoration: InputDecoration(
                     hintText: 'https://youtube.com/watch?v=...',
                     hintStyle:
-                        TextStyle(color: colors.onSurfaceVariant.withOpacity(0.6)),
+                        TextStyle(color: colors.onSurfaceVariant.withValues(alpha: 0.6)),
                     prefixIcon: Icon(Icons.link_rounded,
                         color: colors.primary, size: 20),
                     filled: true,
@@ -397,10 +328,10 @@ class _UrlInputCardState extends State<_UrlInputCard> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(16),
                       decoration: BoxDecoration(
-                        color: colors.surfaceContainerHighest.withOpacity(0.4),
+                        color: colors.surfaceContainerHighest.withValues(alpha: 0.4),
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(
-                            color: colors.outlineVariant.withOpacity(0.5)),
+                            color: colors.outlineVariant.withValues(alpha: 0.5)),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -421,7 +352,8 @@ class _UrlInputCardState extends State<_UrlInputCard> {
                           ),
                           const SizedBox(height: 12),
                           DropdownButtonFormField<String>(
-                            value: selectedBrowser,
+                            key: ValueKey(selectedBrowser),
+                            initialValue: selectedBrowser,
                             items: browsers
                                 .map(
                                   (b) => DropdownMenuItem<String>(
@@ -565,7 +497,7 @@ class _ErrorBanner extends StatelessWidget {
       decoration: BoxDecoration(
         color: colors.errorContainer,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: colors.error.withOpacity(0.3)),
+        border: Border.all(color: colors.error.withValues(alpha: 0.3)),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -586,230 +518,3 @@ class _ErrorBanner extends StatelessWidget {
   }
 }
 
-// ──────────────────────────────────────────────────────────────────────────────
-// Format + Download section
-// ──────────────────────────────────────────────────────────────────────────────
-
-class _FormatDownloadSection extends StatelessWidget {
-  const _FormatDownloadSection({
-    required this.formats,
-    required this.selectedFormat,
-    required this.isDownloading,
-    required this.progress,
-    required this.colors,
-    required this.theme,
-    required this.onFormatChanged,
-    required this.onDownload,
-    required this.onCancel,
-  });
-
-  final List<VideoFormat> formats;
-  final VideoFormat? selectedFormat;
-  final bool isDownloading;
-  final DownloadProgress? progress;
-  final ColorScheme colors;
-  final ThemeData theme;
-  final ValueChanged<VideoFormat> onFormatChanged;
-  final VoidCallback? onDownload;
-  final VoidCallback onCancel;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: colors.surfaceContainer,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.outlineVariant),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Download Options',
-            style: theme.textTheme.titleMedium?.copyWith(
-              fontWeight: FontWeight.w600,
-              color: colors.onSurface,
-            ),
-          ),
-          const SizedBox(height: 16),
-
-          // Format dropdown
-          Row(
-            children: [
-              Expanded(
-                child: DropdownButtonFormField<VideoFormat>(
-                  value: selectedFormat,
-                  items: formats
-                      .map(
-                        (f) => DropdownMenuItem<VideoFormat>(
-                          value: f,
-                          child: Text(
-                            f.toString(),
-                            style: TextStyle(
-                              color: colors.onSurface,
-                              fontSize: 14,
-                            ),
-                          ),
-                        ),
-                      )
-                      .toList(),
-                  onChanged: isDownloading
-                      ? null
-                      : (VideoFormat? v) {
-                          if (v != null) onFormatChanged(v);
-                        },
-                  decoration: InputDecoration(
-                    labelText: 'Format',
-                    labelStyle:
-                        TextStyle(color: colors.onSurfaceVariant),
-                    prefixIcon: Icon(Icons.high_quality_rounded,
-                        color: colors.primary, size: 20),
-                    filled: true,
-                    fillColor: colors.surfaceContainerHighest,
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide:
-                          BorderSide(color: colors.primary, width: 1.5),
-                    ),
-                    contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 14),
-                  ),
-                  dropdownColor: colors.surfaceContainerHighest,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
-              const SizedBox(width: 12),
-
-              // Download / Cancel button
-              isDownloading
-                  ? OutlinedButton.icon(
-                      onPressed: onCancel,
-                      icon: const Icon(Icons.stop_rounded, size: 18),
-                      label: const Text('Cancel'),
-                      style: OutlinedButton.styleFrom(
-                        foregroundColor: colors.error,
-                        side: BorderSide(color: colors.error),
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    )
-                  : FilledButton.icon(
-                      onPressed: onDownload,
-                      icon: const Icon(Icons.download_rounded, size: 18),
-                      label: const Text('Download'),
-                      style: FilledButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                    ),
-            ],
-          ),
-
-          // Progress section
-          if (isDownloading && progress != null) ...[
-            const SizedBox(height: 20),
-            _DownloadProgressWidget(progress: progress!, colors: colors),
-          ],
-
-          // Done banner
-          if (!isDownloading && progress == null &&
-              selectedFormat != null) ...[
-            // Intentionally empty — done state cleared by provider
-          ],
-        ],
-      ),
-    );
-  }
-}
-
-// ──────────────────────────────────────────────────────────────────────────────
-// Download progress widget
-// ──────────────────────────────────────────────────────────────────────────────
-
-class _DownloadProgressWidget extends StatelessWidget {
-  const _DownloadProgressWidget({
-    required this.progress,
-    required this.colors,
-  });
-
-  final DownloadProgress progress;
-  final ColorScheme colors;
-
-  @override
-  Widget build(BuildContext context) {
-    final pct = progress.percent.clamp(0.0, 100.0);
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Text(
-              '${pct.toStringAsFixed(1)}%',
-              style: TextStyle(
-                color: colors.primary,
-                fontWeight: FontWeight.w600,
-                fontSize: 13,
-              ),
-            ),
-            Row(
-              children: [
-                if (progress.speedLabel != null) ...[
-                  Icon(Icons.speed_rounded,
-                      size: 14, color: colors.onSurfaceVariant),
-                  const SizedBox(width: 4),
-                  Text(
-                    progress.speedLabel!,
-                    style: TextStyle(
-                        color: colors.onSurfaceVariant, fontSize: 12),
-                  ),
-                ],
-                if (progress.etaLabel != null) ...[
-                  const SizedBox(width: 12),
-                  Icon(Icons.timer_outlined,
-                      size: 14, color: colors.onSurfaceVariant),
-                  const SizedBox(width: 4),
-                  Text(
-                    'ETA ${progress.etaLabel!}',
-                    style: TextStyle(
-                        color: colors.onSurfaceVariant, fontSize: 12),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: LinearProgressIndicator(
-            value: pct / 100,
-            minHeight: 8,
-            backgroundColor: colors.surfaceContainerHighest,
-            valueColor: AlwaysStoppedAnimation(colors.primary),
-          ),
-        ),
-        if (progress.sizeLabel != null) ...[
-          const SizedBox(height: 6),
-          Text(
-            progress.sizeLabel!,
-            style: TextStyle(
-                color: colors.onSurfaceVariant, fontSize: 12),
-          ),
-        ],
-      ],
-    );
-  }
-}

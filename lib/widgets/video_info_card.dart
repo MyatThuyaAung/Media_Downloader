@@ -61,7 +61,7 @@ class VideoInfoCard extends StatelessWidget {
                         if (progress == null) return child;
                         return _ThumbnailPlaceholder(colors: colors);
                       },
-                      errorBuilder: (_, __, ___) =>
+                      errorBuilder: (_, _, _) =>
                           _ThumbnailPlaceholder(colors: colors),
                     )
                   : _ThumbnailPlaceholder(colors: colors),
@@ -138,7 +138,7 @@ class _ThumbnailPlaceholder extends StatelessWidget {
         child: Icon(
           Icons.play_circle_outline_rounded,
           size: 56,
-          color: colors.onSurfaceVariant.withOpacity(0.4),
+          color: colors.onSurfaceVariant.withValues(alpha: 0.4),
         ),
       ),
     );

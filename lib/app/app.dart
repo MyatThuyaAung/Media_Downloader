@@ -70,7 +70,7 @@ class MediaDownloaderApp extends StatelessWidget {
       ),
       scrollbarTheme: ScrollbarThemeData(
         thumbColor: WidgetStateProperty.all(
-          colorScheme.primary.withOpacity(0.4),
+          colorScheme.primary.withValues(alpha: 0.4),
         ),
       ),
     );

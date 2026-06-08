@@ -80,6 +80,13 @@ class YtDlpService {
     }
 
     final json = jsonDecode(output) as Map<String, dynamic>;
-    return VideoInfo.fromJson(json);
+    // ignore: avoid_print
+    print('[yt_dlp_service] subtitles keys: ${(json['subtitles'] as Map<String, dynamic>?)?.keys}');
+    // ignore: avoid_print
+    print('[yt_dlp_service] auto_captions keys: ${(json['automatic_captions'] as Map<String, dynamic>?)?.keys}');
+    final info = VideoInfo.fromJson(json);
+    // ignore: avoid_print
+    print('[yt_dlp_service] subtitleLangs: ${info.subtitleLangs}');
+    return info;
   }
 }

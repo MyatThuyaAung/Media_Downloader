@@ -55,6 +55,16 @@ class VideoFormat {
     );
   }
 
+  Map<String, dynamic> toJson() => {
+        'format_id': formatId,
+        'ext': ext,
+        'height': height,
+        'tbr': tbr,
+        'vcodec': vcodec,
+        'acodec': acodec,
+        'label': label,
+      };
+
   @override
   String toString() => label;
 
@@ -99,6 +109,6 @@ List<VideoFormat> buildFormatMenu(List<VideoFormat> raw) {
 
   return [
     ...sortedVideo,
-    if (bestAudio != null) bestAudio,
+    ?bestAudio,
   ];
 }
