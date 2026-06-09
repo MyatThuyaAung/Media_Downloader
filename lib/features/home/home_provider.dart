@@ -14,13 +14,7 @@ final homeProvider = StateNotifierProvider<HomeNotifier, HomeState>(
 );
 
 class HomeNotifier extends StateNotifier<HomeState> {
-  HomeNotifier(this._ref) : super(const HomeState()) {
-    _ref.listen(settingsProvider, (prev, next) {
-      if (!next.isLoading) {
-        state = state.copyWith(subtitleLang: next.defaultSubtitleLang);
-      }
-    });
-  }
+  HomeNotifier(this._ref) : super(const HomeState());
 
   final Ref _ref;
 
@@ -82,6 +76,8 @@ class HomeNotifier extends StateNotifier<HomeState> {
           cookiesBrowser: state.cookiesBrowser,
           subtitleLang: subtitleLang,
           outputDirectory: outputDirectory,
+          duration: video.duration,
+          viewCount: video.viewCount,
         );
   }
 

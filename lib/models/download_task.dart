@@ -16,6 +16,8 @@ class DownloadTask {
   final String? cookiesBrowser;
   final String? outputPath;
   final String? subtitleLang;
+  final int duration;
+  final int? viewCount;
   final DateTime createdAt;
   final DateTime? completedAt;
 
@@ -32,6 +34,8 @@ class DownloadTask {
     this.cookiesBrowser,
     this.outputPath,
     this.subtitleLang,
+    this.duration = 0,
+    this.viewCount,
     required this.createdAt,
     this.completedAt,
   });
@@ -48,6 +52,8 @@ class DownloadTask {
         'cookiesBrowser': cookiesBrowser,
         'outputPath': outputPath,
         'subtitleLang': subtitleLang,
+        'duration': duration,
+        'viewCount': viewCount,
         'createdAt': createdAt.toIso8601String(),
         'completedAt': completedAt?.toIso8601String(),
       };
@@ -64,6 +70,8 @@ class DownloadTask {
         cookiesBrowser: json['cookiesBrowser'] as String?,
         outputPath: json['outputPath'] as String?,
         subtitleLang: json['subtitleLang'] as String?,
+        duration: (json['duration'] as num?)?.toInt() ?? 0,
+        viewCount: (json['viewCount'] as num?)?.toInt(),
         createdAt: DateTime.parse(json['createdAt'] as String),
         completedAt: json['completedAt'] != null
             ? DateTime.parse(json['completedAt'] as String)
@@ -83,6 +91,8 @@ class DownloadTask {
     String? cookiesBrowser,
     Object? outputPath = _undefined,
     Object? subtitleLang = _undefined,
+    int? duration,
+    Object? viewCount = _undefined,
     DateTime? createdAt,
     Object? completedAt = _undefined,
   }) {
@@ -106,6 +116,10 @@ class DownloadTask {
       subtitleLang: subtitleLang == _undefined
           ? this.subtitleLang
           : (subtitleLang as String?),
+      duration: duration ?? this.duration,
+      viewCount: viewCount == _undefined
+          ? this.viewCount
+          : (viewCount as int?),
       createdAt: createdAt ?? this.createdAt,
       completedAt: completedAt == _undefined
           ? this.completedAt

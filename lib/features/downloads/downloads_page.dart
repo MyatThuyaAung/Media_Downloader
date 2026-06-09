@@ -6,11 +6,20 @@ import '../../models/download_progress.dart';
 import '../../widgets/app_sidebar.dart';
 import 'download_queue_provider.dart';
 
-class DownloadsPage extends ConsumerWidget {
+enum _QueueTab { all, inProgress, finished, failed }
+
+class DownloadsPage extends ConsumerStatefulWidget {
   const DownloadsPage({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<DownloadsPage> createState() => _DownloadsPageState();
+}
+
+class _DownloadsPageState extends ConsumerState<DownloadsPage> {
+  _QueueTab _tab = _QueueTab.all;
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(downloadQueueProvider);
     final notifier = ref.read(downloadQueueProvider.notifier);
     final theme = Theme.of(context);
@@ -24,6 +33,26 @@ class DownloadsPage extends ConsumerWidget {
         state.tasks.any((t) => t.status == DownloadTaskStatus.paused);
     final activeCount =
         state.tasks.where((t) => t.status != DownloadTaskStatus.done).length;
+    final hasClearable = state.tasks.any(
+      (t) => t.status == DownloadTaskStatus.done ||
+          t.status == DownloadTaskStatus.error,
+    );
+
+    final tasks = switch (_tab) {
+      _QueueTab.inProgress => state.tasks
+          .where((t) =>
+              t.status == DownloadTaskStatus.queued ||
+              t.status == DownloadTaskStatus.downloading ||
+              t.status == DownloadTaskStatus.paused)
+          .toList(),
+      _QueueTab.finished => state.tasks
+          .where((t) => t.status == DownloadTaskStatus.done)
+          .toList(),
+      _QueueTab.failed => state.tasks
+          .where((t) => t.status == DownloadTaskStatus.error)
+          .toList(),
+      _QueueTab.all => state.tasks,
+    };
 
     return Scaffold(
       backgroundColor: colors.surface,
@@ -40,15 +69,69 @@ class DownloadsPage extends ConsumerWidget {
                   hasPaused: anyPaused,
                   onPauseAll: anyActive ? notifier.pauseAll : null,
                   onResumeAll: anyPaused ? notifier.resumeAll : null,
+                  onClearAll: hasClearable ? notifier.clearAllExceptInProgress : null,
+                ),
+                // ── Tab bar ─────────────────────────────────────────────
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 32),
+                  decoration: BoxDecoration(
+                    border: Border(
+                      bottom: BorderSide(color: colors.outlineVariant, width: 1),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      _TabChip(
+                        label: 'All',
+                        count: state.tasks.length,
+                        selected: _tab == _QueueTab.all,
+                        colors: colors,
+                        onTap: () => setState(() => _tab = _QueueTab.all),
+                      ),
+                      const SizedBox(width: 8),
+                      _TabChip(
+                        label: 'In-progress',
+                        count: state.tasks
+                            .where((t) =>
+                                t.status == DownloadTaskStatus.queued ||
+                                t.status == DownloadTaskStatus.downloading ||
+                                t.status == DownloadTaskStatus.paused)
+                            .length,
+                        selected: _tab == _QueueTab.inProgress,
+                        colors: colors,
+                        onTap: () => setState(() => _tab = _QueueTab.inProgress),
+                      ),
+                      const SizedBox(width: 8),
+                      _TabChip(
+                        label: 'Finished',
+                        count: state.tasks
+                            .where((t) => t.status == DownloadTaskStatus.done)
+                            .length,
+                        selected: _tab == _QueueTab.finished,
+                        colors: colors,
+                        onTap: () => setState(() => _tab = _QueueTab.finished),
+                      ),
+                      const SizedBox(width: 8),
+                      _TabChip(
+                        label: 'Failed',
+                        count: state.tasks
+                            .where((t) => t.status == DownloadTaskStatus.error)
+                            .length,
+                        selected: _tab == _QueueTab.failed,
+                        colors: colors,
+                        onTap: () => setState(() => _tab = _QueueTab.failed),
+                      ),
+                    ],
+                  ),
                 ),
                 Expanded(
-                  child: state.tasks.isEmpty
+                  child: tasks.isEmpty
                       ? _EmptyState(colors: colors)
                       : ListView.builder(
-                          padding: const EdgeInsets.fromLTRB(32, 28, 32, 32),
-                          itemCount: state.tasks.length,
+                          padding: const EdgeInsets.fromLTRB(32, 20, 32, 32),
+                          itemCount: tasks.length,
                           itemBuilder: (context, index) {
-                            final task = state.tasks[index];
+                            final task = tasks[index];
                             return _TaskTile(
                               task: task,
                               colors: colors,
@@ -84,6 +167,48 @@ class DownloadsPage extends ConsumerWidget {
   }
 }
 
+class _TabChip extends StatelessWidget {
+  const _TabChip({
+    required this.label,
+    required this.count,
+    required this.selected,
+    required this.colors,
+    required this.onTap,
+  });
+  final String label;
+  final int count;
+  final bool selected;
+  final ColorScheme colors;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(top: 8, bottom: 8),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+          decoration: BoxDecoration(
+            color: selected
+                ? colors.primary.withValues(alpha: 0.12)
+                : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            '$label ($count)',
+            style: TextStyle(
+              color: selected ? colors.primary : colors.onSurfaceVariant,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 
 
 // ──────────────────────────────────────────────────────────────────────────────
@@ -95,14 +220,16 @@ class _TopBar extends StatelessWidget {
     required this.colors,
     required this.hasActive,
     required this.hasPaused,
-    required this.onPauseAll,
-    required this.onResumeAll,
+    this.onPauseAll,
+    this.onResumeAll,
+    this.onClearAll,
   });
   final ColorScheme colors;
   final bool hasActive;
   final bool hasPaused;
   final VoidCallback? onPauseAll;
   final VoidCallback? onResumeAll;
+  final VoidCallback? onClearAll;
 
   @override
   Widget build(BuildContext context) {
@@ -151,6 +278,23 @@ class _TopBar extends StatelessWidget {
                     size: 16, color: colors.primary),
                 label: Text('Resume All',
                     style: TextStyle(fontSize: 12, color: colors.primary)),
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
+          if (onClearAll != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: TextButton.icon(
+                onPressed: onClearAll,
+                icon: Icon(Icons.clear_all_rounded,
+                    size: 16, color: colors.error),
+                label: Text('Clear All',
+                    style: TextStyle(fontSize: 12, color: colors.error)),
                 style: TextButton.styleFrom(
                   padding: const EdgeInsets.symmetric(horizontal: 12),
                   shape: RoundedRectangleBorder(
@@ -236,191 +380,276 @@ class _TaskTile extends StatelessWidget {
   final VoidCallback? onCancel;
   final VoidCallback? onRemove;
 
+  String _formatDuration(int seconds) {
+    final d = Duration(seconds: seconds);
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildThumbnail() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 100,
+        height: 56,
+        child: Stack(
+          children: [
+            if (task.thumbnailUrl != null && task.thumbnailUrl!.isNotEmpty)
+              Image.network(
+                task.thumbnailUrl!,
+                width: 100,
+                height: 56,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) =>
+                    progress == null ? child : _ThumbPlaceholder(colors: colors, width: 100, height: 56),
+                errorBuilder: (_, _, _) =>
+                    _ThumbPlaceholder(colors: colors, width: 100, height: 56),
+              )
+            else
+              _ThumbPlaceholder(colors: colors, width: 100, height: 56),
+            if (task.duration > 0)
+              Positioned(
+                right: 3,
+                bottom: 3,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    _formatDuration(task.duration),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return SizedBox(
-      height: 180,
-      child: Container(
-        margin: const EdgeInsets.only(bottom: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: colors.surfaceContainer,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: colors.outlineVariant),
-        ),
-        child: Column(
+    return Container(
+      margin: const EdgeInsets.only(bottom: 12),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surfaceContainer,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.outlineVariant),
+      ),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
-              _StatusIcon(status: task.status, colors: colors),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
+          _buildThumbnail(),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Text(
-                      task.title,
-                      style: TextStyle(
-                        color: colors.onSurface,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
+                    Expanded(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            task.title,
+                            style: TextStyle(
+                              color: colors.onSurface,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          if (task.uploader != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 1),
+                              child: Row(
+                                children: [
+                                  _StatusIcon(status: task.status, colors: colors),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Text(
+                                      task.uploader!,
+                                      style: TextStyle(
+                                        color: colors.onSurfaceVariant,
+                                        fontSize: 11,
+                                      ),
+                                      maxLines: 1,
+                                      overflow: TextOverflow.ellipsis,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                        ],
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
-                    if (task.uploader != null)
-                      Padding(
-                        padding: const EdgeInsets.only(top: 1),
+                    const SizedBox(width: 8),
+                    // Action buttons
+                    if (onPause != null)
+                      SizedBox(
+                        height: 28,
+                        child: OutlinedButton.icon(
+                          onPressed: onPause,
+                          icon: const Icon(Icons.pause_rounded, size: 12),
+                          label: const Text('Pause', style: TextStyle(fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: colors.primary,
+                            side: BorderSide(color: colors.primary.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (onResume != null)
+                      SizedBox(
+                        height: 28,
+                        child: OutlinedButton.icon(
+                          onPressed: onResume,
+                          icon: const Icon(Icons.play_arrow_rounded, size: 12),
+                          label: const Text('Resume', style: TextStyle(fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: colors.primary,
+                            side: BorderSide(color: colors.primary.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (onCancel != null)
+                      SizedBox(
+                        height: 28,
+                        child: OutlinedButton.icon(
+                          onPressed: onCancel,
+                          icon: const Icon(Icons.stop_rounded, size: 12),
+                          label: const Text('Cancel', style: TextStyle(fontSize: 11)),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: colors.error,
+                            side: BorderSide(color: colors.error.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (onRemove != null)
+                      SizedBox(
+                        height: 28,
+                        child: TextButton.icon(
+                          onPressed: onRemove,
+                          icon: const Icon(Icons.close_rounded, size: 12),
+                          label: const Text('Dismiss', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: colors.onSurfaceVariant,
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+
+                // Phase / status label
+                if (task.status == DownloadTaskStatus.downloading &&
+                    task.progress != null &&
+                    task.progress!.phase != null) ...[
+                  const SizedBox(height: 6),
+                  Row(
+                    children: [
+                      SizedBox(
+                        width: 12,
+                        height: 12,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: colors.primary,
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Expanded(
                         child: Text(
-                          task.uploader!,
+                          task.progress!.phase!,
                           style: TextStyle(
-                            color: colors.onSurfaceVariant,
-                            fontSize: 12,
+                            color: colors.primary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
                           ),
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                  ],
-                ),
-              ),
-
-              // Pause button (downloading)
-              if (onPause != null)
-                SizedBox(
-                  height: 32,
-                  child: OutlinedButton.icon(
-                    onPressed: onPause,
-                    icon: const Icon(Icons.pause_rounded, size: 14),
-                    label: const Text('Pause', style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colors.primary,
-                      side: BorderSide(color: colors.primary.withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
+                    ],
                   ),
-                ),
+                ],
 
-              // Resume button (paused)
-              if (onResume != null)
-                SizedBox(
-                  height: 32,
-                  child: OutlinedButton.icon(
-                    onPressed: onResume,
-                    icon: const Icon(Icons.play_arrow_rounded, size: 14),
-                    label: const Text('Resume', style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colors.primary,
-                      side: BorderSide(color: colors.primary.withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
+                // Progress bar
+                if (task.status == DownloadTaskStatus.downloading &&
+                    task.progress != null &&
+                    task.progress!.percent > 0) ...[
+                  const SizedBox(height: 8),
+                  _ProgressBar(progress: task.progress!, colors: colors),
+                ],
 
-              // Cancel button (queued)
-              if (onCancel != null)
-                SizedBox(
-                  height: 32,
-                  child: OutlinedButton.icon(
-                    onPressed: onCancel,
-                    icon: const Icon(Icons.stop_rounded, size: 14),
-                    label: const Text('Cancel', style: TextStyle(fontSize: 12)),
-                    style: OutlinedButton.styleFrom(
-                      foregroundColor: colors.error,
-                      side: BorderSide(color: colors.error.withValues(alpha: 0.5)),
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-
-              // Dismiss button (done / error)
-              if (onRemove != null)
-                SizedBox(
-                  height: 32,
-                  child: TextButton.icon(
-                    onPressed: onRemove,
-                    icon: const Icon(Icons.close_rounded, size: 14),
-                    label: const Text('Dismiss', style: TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(
-                      foregroundColor: colors.onSurfaceVariant,
-                      padding: const EdgeInsets.symmetric(horizontal: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                ),
-            ],
-          ),
-
-          // Phase / status label (e.g. "Merging Audio & Video...", "Resuming...")
-          if (task.status == DownloadTaskStatus.downloading &&
-              task.progress != null &&
-              task.progress!.phase != null) ...[
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                SizedBox(
-                  width: 14,
-                  height: 14,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: colors.primary,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Text(
-                    task.progress!.phase!,
+                // Error message
+                if (task.status == DownloadTaskStatus.error &&
+                    task.errorMessage != null) ...[
+                  const SizedBox(height: 6),
+                  Text(
+                    task.errorMessage!,
                     style: TextStyle(
-                      color: colors.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
+                      color: colors.error,
+                      fontSize: 11,
                     ),
-                    maxLines: 1,
+                    maxLines: 2,
                     overflow: TextOverflow.ellipsis,
                   ),
-                ),
+                ],
               ],
             ),
-          ],
-
-          // Numeric progress bar (when we have real percent data)
-          if (task.status == DownloadTaskStatus.downloading &&
-              task.progress != null &&
-              task.progress!.percent > 0) ...[
-            const SizedBox(height: 12),
-            _ProgressBar(progress: task.progress!, colors: colors),
-          ],
-
-          // Error message
-          if (task.status == DownloadTaskStatus.error &&
-              task.errorMessage != null) ...[
-            const SizedBox(height: 8),
-            Text(
-              task.errorMessage!,
-              style: TextStyle(
-                color: colors.error,
-                fontSize: 12,
-              ),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
+          ),
         ],
       ),
+    );
+  }
+}
+
+class _ThumbPlaceholder extends StatelessWidget {
+  const _ThumbPlaceholder({required this.colors, required this.width, required this.height});
+  final ColorScheme colors;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      color: colors.surfaceContainerHighest,
+      child: Icon(
+        Icons.play_circle_outline_rounded,
+        size: 24,
+        color: colors.onSurfaceVariant.withValues(alpha: 0.4),
       ),
     );
   }

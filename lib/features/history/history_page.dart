@@ -64,6 +64,9 @@ class HistoryPage extends ConsumerWidget {
                               itemCount: state.entries.length,
                               itemBuilder: (context, index) {
                                 final entry = state.entries[index];
+                                if (entry.status != DownloadTaskStatus.done) {
+                                  return const SizedBox.shrink();
+                                }
                                 return _HistoryTile(
                                   entry: entry,
                                   colors: colors,
@@ -106,11 +109,69 @@ class _HistoryTile extends StatelessWidget {
     return '${dt.month}/${dt.day}/${dt.year}';
   }
 
+  String _formatDuration(int seconds) {
+    final d = Duration(seconds: seconds);
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    final s = d.inSeconds.remainder(60);
+    if (h > 0) {
+      return '$h:${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+    }
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
+  Widget _buildThumbnail() {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(8),
+      child: SizedBox(
+        width: 100,
+        height: 56,
+        child: Stack(
+          children: [
+            if (entry.thumbnailUrl != null && entry.thumbnailUrl!.isNotEmpty)
+              Image.network(
+                entry.thumbnailUrl!,
+                width: 100,
+                height: 56,
+                fit: BoxFit.cover,
+                loadingBuilder: (_, child, progress) =>
+                    progress == null ? child : _ThumbPlaceholder(colors: colors, width: 100, height: 56),
+                errorBuilder: (_, _, _) =>
+                    _ThumbPlaceholder(colors: colors, width: 100, height: 56),
+              )
+            else
+              _ThumbPlaceholder(colors: colors, width: 100, height: 56),
+            if (entry.duration > 0)
+              Positioned(
+                right: 3,
+                bottom: 3,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: Colors.black87,
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    _formatDuration(entry.duration),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 9,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Container(
       margin: const EdgeInsets.only(bottom: 8),
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: colors.surfaceContainer,
         borderRadius: BorderRadius.circular(12),
@@ -118,17 +179,8 @@ class _HistoryTile extends StatelessWidget {
       ),
       child: Row(
         children: [
-          Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              color: colors.primary.withValues(alpha: 0.12),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Icon(Icons.check_circle_rounded,
-                color: colors.primary, size: 20),
-          ),
-          const SizedBox(width: 12),
+          _buildThumbnail(),
+          const SizedBox(width: 14),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -137,7 +189,7 @@ class _HistoryTile extends StatelessWidget {
                   entry.title,
                   style: TextStyle(
                     color: colors.onSurface,
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w600,
                   ),
                   maxLines: 1,
@@ -148,7 +200,7 @@ class _HistoryTile extends StatelessWidget {
                   '${entry.format.label} • ${entry.completedAt != null ? _formatDate(entry.completedAt!) : ''}',
                   style: TextStyle(
                     color: colors.onSurfaceVariant,
-                    fontSize: 12,
+                    fontSize: 11,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -172,6 +224,27 @@ class _HistoryTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ThumbPlaceholder extends StatelessWidget {
+  const _ThumbPlaceholder({required this.colors, required this.width, required this.height});
+  final ColorScheme colors;
+  final double width;
+  final double height;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: width,
+      height: height,
+      color: colors.surfaceContainerHighest,
+      child: Icon(
+        Icons.play_circle_outline_rounded,
+        size: 24,
+        color: colors.onSurfaceVariant.withValues(alpha: 0.4),
       ),
     );
   }

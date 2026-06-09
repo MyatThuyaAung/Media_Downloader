@@ -74,6 +74,8 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     String? cookiesBrowser,
     String? subtitleLang,
     String? outputDirectory,
+    int duration = 0,
+    int? viewCount,
   }) {
     final safeTitle =
         title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
@@ -91,6 +93,8 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
       cookiesBrowser: cookiesBrowser,
       subtitleLang: subtitleLang,
       outputPath: outputPath,
+      duration: duration,
+      viewCount: viewCount,
       createdAt: DateTime.now(),
     );
 
@@ -280,19 +284,11 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   /// yt-dlp has all bytes on disk and starts post-processing).
   ///
   /// Moves the task to the post-processing (muxing) phase and immediately
-  /// starts the next queued download.
+  /// starts the next queued download. The progress bar stays pinned at 100%
+  /// with the actual phase (e.g. "Downloading Audio") preserved.
   void _onDownloadComplete(String taskId) {
     _processingTaskIds.add(taskId);
     _networkTaskId = null;
-
-    // Show the merging indicator while keeping 100% visible on the bar
-    _updateTask(
-      taskId,
-      progress: const DownloadProgress(
-        percent: 100,
-        phase: 'Merging Audio & Video...',
-      ),
-    );
 
     // Unblock the queue — next file starts NOW,
     // while this task continues muxing in its own process
@@ -420,6 +416,18 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     state = state.copyWith(
       tasks: state.tasks
           .where((t) => t.status != DownloadTaskStatus.done)
+          .toList(),
+    );
+    _persistQueue();
+  }
+
+  void clearAllExceptInProgress() {
+    state = state.copyWith(
+      tasks: state.tasks
+          .where((t) =>
+              t.status == DownloadTaskStatus.queued ||
+              t.status == DownloadTaskStatus.downloading ||
+              t.status == DownloadTaskStatus.paused)
           .toList(),
     );
     _persistQueue();

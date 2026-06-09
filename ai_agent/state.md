@@ -117,7 +117,20 @@ lib/
 - **Serialization**: `VideoFormat.toJson()` and `DownloadTask.toJson()/fromJson()` added for persistence
 - `flutter analyze` clean (0 errors, 0 warnings) + build passes ✅
 
+## Key M3.1 Changes
+- **Queue tile thumbnails**: `_TaskTile` now shows 100×56 thumbnail with duration badge on left, status icon inline with uploader, action buttons compacted
+- **History tile thumbnails**: `_HistoryTile` uses the same thumbnail layout
+- **Clear All button**: Downloads `_TopBar` shows "Clear All" (error-colored) when any task is done/error, calls `clearAllExceptInProgress()`
+- **`_ThumbPlaceholder`**: Shared private widget for thumbnail loading/error states (duplicated in both files)
+- **`_formatDuration`**: HH:MM:SS or MM:SS formatting added to both tile widgets
+
+## Key M3.2 Changes (Linux Support)
+- **Linux binaries**: `assets/binaries/Linux/ffmpeg` (extracted from `.deb`) and `assets/binaries/Linux/yt-dlp`
+- **pubspec.yaml**: registered `assets/binaries/linux/` for asset bundling
+- **Zero Dart code changes**: `PlatformUtils` already had correct Linux paths (`assets/binaries/linux/yt-dlp`, `assets/binaries/linux/ffmpeg`, binary names without `.exe`); `YtDlpService` and `DownloadService` already had `chmod +x` for non-Windows
+- **Linux runner**: standard Flutter-generated files in `linux/` — GTK3 app with `window_manager` and `screen_retriever` plugins registered
+
 ## Known Issues / Gaps
-- Linux binary bundling not started yet
-- Platform detection utilities for Linux not implemented
+- Linux build requires a Linux host: `flutter build linux --release`
+- No `.desktop` file yet for system-level app registration
 - Task stuck at "Remuxing" 100% without CC needs testing after `--remux-video` removal

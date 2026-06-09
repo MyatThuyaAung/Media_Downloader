@@ -207,6 +207,7 @@ class DownloadService {
                 currentSizeLabel: _mainCurrentSizeLabel,
               ));
             } else {
+              _inSubtitlePhase = false;
               _streamCount++;
               controller.add(DownloadProgress.phase(
                 _streamCount == 1 ? 'Downloading Video' : 'Downloading Audio',

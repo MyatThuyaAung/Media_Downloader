@@ -1,15 +1,16 @@
-Last updated: 2026-06-08 20:21:18 +06:30
+Last updated: 2026-06-09 16:30:00 +06:30
 
 # Work In Progress
 
-## Status: Subtitle system overhaul + process hang fix
+## Status: Linux support implemented
 
 ### Recently Done
-- **CC checkbox replaced** with `DropdownButton<String>` in both `VideoDownloadTile` and `_UrlInputCard` — options: "None" (default), "English"
-- **`subtitleLang` (`String?`)** replaces `downloadSubtitles` (`bool`) across entire app: models, services, providers, UI
-- **Process hang fix** in `download_service.dart`:
-  - Process execution wrapped in `try/finally` — ensures controller always closes, subscriptions always cancel
-  - Stream subscriptions stored and cancelled in `finally` block
-  - `_processes.remove(taskId)` moved to `finally` — no more leaked process references
-- **Previous fixes**: format selection now works, sentinel bug in SettingsState fixed, HomeNotifier settings sync via `ref.listen`, shared AppSidebar widget, lint cleanup
+- **Extracted ffmpeg** from `ffmpeg_7.1.4-0+deb13u1_amd64.deb` → `assets/binaries/Linux/ffmpeg` (366 KB)
+- **yt-dlp** (Linux binary, 3.2 MB) already at `assets/binaries/Linux/yt-dlp`
+- **pubspec.yaml**: added `assets/binaries/linux/` to asset declarations
+- **No code changes needed**: `PlatformUtils`, `YtDlpService`, `DownloadService` already handle Linux (paths, `chmod +x`)
 - `flutter analyze` — **0 issues found**
+
+### Next
+- Build on Linux: `flutter build linux --release` (requires Linux build host)
+- Create `.desktop` file for system integration if distributing

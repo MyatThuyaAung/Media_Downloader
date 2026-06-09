@@ -36,11 +36,6 @@ class SettingsService {
     return data['outputDirectory'] as String?;
   }
 
-  Future<String?> getDefaultSubtitleLang() async {
-    final data = await load();
-    return data['defaultSubtitleLang'] as String?;
-  }
-
   Future<String?> getDefaultCookiesBrowser() async {
     final data = await load();
     return data['defaultCookiesBrowser'] as String?;
@@ -49,12 +44,6 @@ class SettingsService {
   Future<void> setOutputDirectory(String? path) async {
     final data = await load();
     data['outputDirectory'] = path;
-    await save(data);
-  }
-
-  Future<void> setDefaultSubtitleLang(String? value) async {
-    final data = await load();
-    data['defaultSubtitleLang'] = value;
     await save(data);
   }
 
