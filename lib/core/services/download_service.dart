@@ -57,10 +57,26 @@ class DownloadService {
     return exePath;
   }
 
-  /// Returns the path to the FFmpeg executable, extracting it from assets
-  /// to the app support directory on first call.
+  /// Returns the path to the FFmpeg executable, preferring the system-installed
+  /// one and falling back to extracting the bundled binary from assets.
   Future<String> get ffmpegExecutable async {
     if (_ffmpegPath != null) return _ffmpegPath!;
+
+    // Try system ffmpeg first (more compatible than the bundled binary)
+    if (!Platform.isWindows) {
+      try {
+        final result = await Process.run('which', ['ffmpeg']);
+        if (result.exitCode == 0) {
+          final path = (result.stdout as String).trim();
+          if (path.isNotEmpty) {
+            _ffmpegPath = path;
+            return path;
+          }
+        }
+      } catch (_) {
+        // ignore
+      }
+    }
 
     final supportDir = await getApplicationSupportDirectory();
     final binDir = Directory('${supportDir.path}/binaries');
@@ -275,7 +291,10 @@ class DownloadService {
       stderrSub = process.stderr
           .transform(decoder)
           .transform(const LineSplitter())
-          .listen((line) => stderrBuffer.writeln(line));
+          .listen((line) {
+        stderrBuffer.writeln(line);
+        debugPrint('[download_service:stderr] $line');
+      });
 
       debugPrint('[download_service] awaiting exit code for $taskId');
 
@@ -307,14 +326,12 @@ class DownloadService {
           ));
         }
       } else {
+        final errMsg = stderrBuffer.isNotEmpty
+            ? stderrBuffer.toString()
+            : 'yt-dlp exited with code $exitCode';
+        debugPrint('[download_service] ERROR: $errMsg');
         if (!controller.isClosed) {
-          controller.addError(
-            Exception(
-              stderrBuffer.isNotEmpty
-                  ? stderrBuffer.toString()
-                  : 'yt-dlp exited with code $exitCode',
-            ),
-          );
+          controller.addError(Exception(errMsg));
         }
       }
     } catch (e, st) {
