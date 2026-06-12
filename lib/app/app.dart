@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'router.dart';
 
@@ -35,7 +34,7 @@ class MediaDownloaderApp extends StatelessWidget {
     return ThemeData(
       useMaterial3: true,
       colorScheme: colorScheme,
-      textTheme: GoogleFonts.interTextTheme(_buildTextTheme(colorScheme)),
+      textTheme: _buildTextTheme(colorScheme),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
         fillColor: colorScheme.surfaceContainerHighest,
@@ -79,26 +78,31 @@ class MediaDownloaderApp extends StatelessWidget {
   TextTheme _buildTextTheme(ColorScheme colors) {
     return TextTheme(
       headlineMedium: TextStyle(
+        fontFamily: 'Inter',
         fontSize: 26,
         fontWeight: FontWeight.w700,
         color: colors.onSurface,
         letterSpacing: -0.5,
       ),
       titleLarge: TextStyle(
+        fontFamily: 'Inter',
         fontSize: 18,
         fontWeight: FontWeight.w600,
         color: colors.onSurface,
       ),
       titleMedium: TextStyle(
+        fontFamily: 'Inter',
         fontSize: 15,
         fontWeight: FontWeight.w600,
         color: colors.onSurface,
       ),
       bodyMedium: TextStyle(
+        fontFamily: 'Inter',
         fontSize: 14,
         color: colors.onSurfaceVariant,
       ),
       labelLarge: TextStyle(
+        fontFamily: 'Inter',
         fontSize: 12,
         fontWeight: FontWeight.w600,
         color: colors.onSurfaceVariant,

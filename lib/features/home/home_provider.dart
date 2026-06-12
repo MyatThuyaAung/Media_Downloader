@@ -4,7 +4,6 @@ import '../../models/video_format.dart';
 import '../../models/video_info.dart';
 import '../../core/services/yt_dlp_service.dart';
 import '../downloads/download_queue_provider.dart';
-import '../settings/settings_provider.dart';
 import 'home_state.dart';
 
 final _ytDlpService = YtDlpService();
@@ -65,8 +64,8 @@ class HomeNotifier extends StateNotifier<HomeState> {
     required VideoInfo video,
     required VideoFormat format,
     required String? subtitleLang,
+    String? outputDirectory,
   }) {
-    final outputDirectory = _ref.read(settingsProvider).outputDirectory;
     _ref.read(downloadQueueProvider.notifier).addTask(
           url: state.url.trim(),
           title: video.title,
@@ -79,10 +78,6 @@ class HomeNotifier extends StateNotifier<HomeState> {
           duration: video.duration,
           viewCount: video.viewCount,
         );
-  }
-
-  void cancelDownload() {
-    _ref.read(downloadQueueProvider.notifier).cancelActive();
   }
 
 }

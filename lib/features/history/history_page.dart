@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/platform_utils.dart';
 import '../../models/download_task.dart';
 import '../../widgets/app_sidebar.dart';
 import 'history_provider.dart';
@@ -64,9 +65,6 @@ class HistoryPage extends ConsumerWidget {
                               itemCount: state.entries.length,
                               itemBuilder: (context, index) {
                                 final entry = state.entries[index];
-                                if (entry.status != DownloadTaskStatus.done) {
-                                  return const SizedBox.shrink();
-                                }
                                 return _HistoryTile(
                                   entry: entry,
                                   colors: colors,
@@ -208,6 +206,25 @@ class _HistoryTile extends StatelessWidget {
               ],
             ),
           ),
+          if (entry.status == DownloadTaskStatus.done &&
+              entry.outputPath != null)
+            SizedBox(
+              height: 32,
+              child: IconButton(
+                tooltip: 'Open folder',
+                onPressed: () =>
+                    PlatformUtils.openContainingFolder(entry.outputPath!),
+                icon: Icon(Icons.folder_open_rounded,
+                    size: 16, color: colors.primary),
+                style: IconButton.styleFrom(
+                  padding: const EdgeInsets.all(8),
+                  minimumSize: Size.zero,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
           SizedBox(
             height: 32,
             child: IconButton(

@@ -1,20 +1,51 @@
 import 'dart:io';
 
-/// Platform-aware paths for bundled executables.
 class PlatformUtils {
   PlatformUtils._();
 
-  static String get ytDlpExecutableName =>
-      Platform.isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+  // ── OS detection ─────────────────────────────────────────────────────────
 
-  static String get ytDlpAssetPath => Platform.isWindows
-      ? 'assets/binaries/windows/yt-dlp.exe'
-      : 'assets/binaries/linux/yt-dlp';
+  static bool get _isWindows => Platform.isWindows;
+  static bool get _isMacOS => Platform.isMacOS;
+
+  // ── yt-dlp ───────────────────────────────────────────────────────────────
+
+  static String get ytDlpExecutableName =>
+      _isWindows ? 'yt-dlp.exe' : 'yt-dlp';
+
+  static String get ytDlpAssetPath {
+    if (_isWindows) return 'assets/binaries/windows/yt-dlp.exe';
+    if (_isMacOS) return 'assets/binaries/macos/yt-dlp';
+    return 'assets/binaries/linux/yt-dlp';
+  }
+
+  // ── Folder utilities ─────────────────────────────────────────────────────
+
+  /// Opens the containing folder of [outputPath] in the system file manager.
+  /// If the path contains the yt-dlp `%(ext)s` template placeholder, it is
+  /// stripped before extracting the parent directory.
+  static void openContainingFolder(String outputPath) {
+    final cleanPath = outputPath.replaceAll('%(ext)s', '');
+    final dir = Directory(cleanPath).parent;
+    if (!dir.existsSync()) return;
+
+    if (_isWindows) {
+      Process.run('explorer', [dir.path]);
+    } else if (_isMacOS) {
+      Process.run('open', [dir.path]);
+    } else {
+      Process.run('xdg-open', [dir.path]);
+    }
+  }
+
+  // ── ffmpeg ───────────────────────────────────────────────────────────────
 
   static String get ffmpegExecutableName =>
-      Platform.isWindows ? 'ffmpeg.exe' : 'ffmpeg';
+      _isWindows ? 'ffmpeg.exe' : 'ffmpeg';
 
-  static String get ffmpegAssetPath => Platform.isWindows
-      ? 'assets/binaries/windows/ffmpeg.exe'
-      : 'assets/binaries/linux/ffmpeg';
+  static String get ffmpegAssetPath {
+    if (_isWindows) return 'assets/binaries/windows/ffmpeg.exe';
+    if (_isMacOS) return 'assets/binaries/macos/ffmpeg';
+    return 'assets/binaries/linux/ffmpeg';
+  }
 }

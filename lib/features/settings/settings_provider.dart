@@ -21,12 +21,9 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
 
   Future<void> load() async {
     final outputDirectory = await _settingsService.getOutputDirectory();
-    final defaultCookiesBrowser =
-        await _settingsService.getDefaultCookiesBrowser();
 
     state = SettingsState(
       outputDirectory: outputDirectory,
-      defaultCookiesBrowser: defaultCookiesBrowser,
       isLoading: false,
     );
   }
@@ -35,11 +32,5 @@ class SettingsNotifier extends StateNotifier<SettingsState> {
     state = state.copyWith(isSaving: true);
     await _settingsService.setOutputDirectory(path);
     state = state.copyWith(outputDirectory: path, isSaving: false);
-  }
-
-  Future<void> setDefaultCookiesBrowser(String? value) async {
-    state = state.copyWith(isSaving: true);
-    await _settingsService.setDefaultCookiesBrowser(value);
-    state = state.copyWith(defaultCookiesBrowser: value, isSaving: false);
   }
 }

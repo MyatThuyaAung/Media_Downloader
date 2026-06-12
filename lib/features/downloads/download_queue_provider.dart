@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
@@ -47,10 +48,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   /// yt-dlp process is still running (muxing/converting with ffmpeg).
   final Set<String> _processingTaskIds = {};
 
-  /// Tracks the highest progress percentage ever seen per task.
-  /// Used to prevent the progress bar from jumping backwards during
-  /// multi-pass downloads (video → audio → subtitles → muxing).
-  final Map<String, double> _highestPercent = {};
+
 
   Future<void> _init() async {
     final saved = await _queuePersistence.load();
@@ -77,12 +75,30 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     int duration = 0,
     int? viewCount,
   }) {
-    final safeTitle =
+    var safeTitle =
         title.replaceAll(RegExp(r'[\\/:*?"<>|]'), '_').trim();
+    if (outputDirectory != null) {
+      try {
+        final dir = Directory(outputDirectory);
+        if (dir.existsSync()) {
+          int suffix = 0;
+          String candidate;
+          do {
+            candidate = suffix == 0 ? safeTitle : '${safeTitle}_$suffix';
+            suffix++;
+          } while (dir.listSync().any((f) {
+            final name = f.path.replaceAll('\\', '/').split('/').last;
+            return name.startsWith('$candidate.');
+          }));
+          safeTitle = candidate;
+        }
+      } catch (_) {
+        // If directory listing fails, proceed without suffix
+      }
+    }
     final outputPath = outputDirectory != null
         ? '$outputDirectory/$safeTitle.%(ext)s'
         : null;
-
     final task = DownloadTask(
       id: const Uuid().v4(),
       url: url,
@@ -150,7 +166,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
           task.outputPath ?? await _generateOutputPath(task.title);
 
       if (task.outputPath == null) {
-        _updateTask(task.id, outputPath: outputPath);
+        _updateTaskOutputPath(task.id, outputPath);
       }
 
       // Immediate phase feedback before yt-dlp handshake
@@ -182,24 +198,19 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
 
       stream.listen(
         (progress) {
-          if (mounted) {
-            _onProgress(task.id, progress);
-          }
+          _onProgress(task.id, progress);
         },
         onError: (Object e) {
-          if (mounted) _failTask(task.id, e.toString());
+          _failTask(task.id, e.toString());
         },
         onDone: () {
-          // Stream ended — if task isn't done yet, something went wrong.
           try {
-            if (mounted) {
-              final t = state.tasks.firstWhere((t) => t.id == task.id);
-              if (t.status == DownloadTaskStatus.done ||
-                  t.status == DownloadTaskStatus.error) {
-                return;
-              }
-              _failTask(task.id, 'Download stream ended unexpectedly');
+            final t = state.tasks.firstWhere((t) => t.id == task.id);
+            if (t.status == DownloadTaskStatus.done ||
+                t.status == DownloadTaskStatus.error) {
+              return;
             }
+            _failTask(task.id, 'Download stream ended unexpectedly');
           } catch (_) {}
         },
       );
@@ -231,33 +242,6 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
       } else {
         _updateTask(taskId, progress: progress);
       }
-      return;
-    }
-
-    // Track highest percent ever seen for multi-pass / sub-stream detection
-    final prevHighest = _highestPercent[taskId] ?? 0.0;
-    if (progress.percent > prevHighest) {
-      _highestPercent[taskId] = progress.percent;
-    }
-
-    // Sub-stream detection: task is in post-processing but yt-dlp is still
-    // emitting progress (downloading audio tracks, subtitles, etc.).
-    // Pin the bar at the highest seen percent and preserve the phase
-    // provided by the DownloadService (e.g. "Downloading Audio").
-    if (_processingTaskIds.contains(taskId) &&
-        progress.percent < prevHighest &&
-        prevHighest >= 100) {
-      _updateTask(
-        taskId,
-        progress: DownloadProgress(
-          percent: prevHighest,
-          phase: progress.phase ?? 'Processing...',
-          speedLabel: progress.speedLabel,
-          sizeLabel: progress.sizeLabel,
-          currentSizeLabel: progress.currentSizeLabel,
-          etaLabel: progress.etaLabel,
-        ),
-      );
       return;
     }
 
@@ -300,7 +284,6 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     _services.remove(taskId);
     _processingTaskIds.remove(taskId);
     if (taskId == _networkTaskId) _networkTaskId = null;
-    _highestPercent.remove(taskId);
 
     _updateTask(taskId,
         status: DownloadTaskStatus.done,
@@ -412,15 +395,6 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     _processNext();
   }
 
-  void clearCompleted() {
-    state = state.copyWith(
-      tasks: state.tasks
-          .where((t) => t.status != DownloadTaskStatus.done)
-          .toList(),
-    );
-    _persistQueue();
-  }
-
   void clearAllExceptInProgress() {
     state = state.copyWith(
       tasks: state.tasks
@@ -438,7 +412,6 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   void _cancelService(String taskId) {
     _services[taskId]?.cancel(taskId);
     _services.remove(taskId);
-    _highestPercent.remove(taskId);
   }
 
   void _updateTask(
@@ -447,7 +420,6 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     DownloadProgress? progress,
     String? errorMessage,
     DateTime? completedAt,
-    String? outputPath,
   }) {
     state = state.copyWith(
       tasks: state.tasks.map((t) {
@@ -457,8 +429,16 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
           progress: progress,
           errorMessage: errorMessage,
           completedAt: completedAt,
-          outputPath: outputPath,
         );
+      }).toList(),
+    );
+  }
+
+  void _updateTaskOutputPath(String taskId, String? outputPath) {
+    state = state.copyWith(
+      tasks: state.tasks.map((t) {
+        if (t.id != taskId) return t;
+        return t.copyWith(outputPath: outputPath);
       }).toList(),
     );
   }
@@ -467,7 +447,6 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     _cancelService(taskId);
     _processingTaskIds.remove(taskId);
     if (taskId == _networkTaskId) _networkTaskId = null;
-    _highestPercent.remove(taskId);
 
     _updateTask(taskId, status: DownloadTaskStatus.error, errorMessage: error);
     _persistQueue();

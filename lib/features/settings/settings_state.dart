@@ -1,31 +1,23 @@
 class SettingsState {
   final String? outputDirectory;
-  final String? defaultCookiesBrowser;
   final bool isLoading;
   final bool isSaving;
 
   const SettingsState({
     this.outputDirectory,
-    this.defaultCookiesBrowser,
     this.isLoading = false,
     this.isSaving = false,
   });
 
   SettingsState copyWith({
-    String? outputDirectory,
-    String? defaultCookiesBrowser,
+    Object? outputDirectory = _undefined,
     bool? isLoading,
     bool? isSaving,
-    Object? outputDirectorySentinel = _undefined,
-    Object? defaultCookiesBrowserSentinel = _undefined,
   }) {
     return SettingsState(
-      outputDirectory: outputDirectorySentinel == _undefined
+      outputDirectory: outputDirectory == _undefined
           ? this.outputDirectory
-          : outputDirectory,
-      defaultCookiesBrowser: defaultCookiesBrowserSentinel == _undefined
-          ? this.defaultCookiesBrowser
-          : defaultCookiesBrowser,
+          : outputDirectory as String?,
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
     );

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../models/download_task.dart';
 import '../../widgets/app_sidebar.dart';
 import '../../widgets/video_download_tile.dart';
 import '../downloads/download_queue_provider.dart';
+import '../settings/settings_provider.dart';
 import 'home_provider.dart';
 
 class HomePage extends ConsumerWidget {
@@ -14,6 +16,8 @@ class HomePage extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(homeProvider);
     final queueState = ref.watch(downloadQueueProvider);
+    final settings = ref.watch(settingsProvider);
+    final outputDir = settings.isLoading ? null : settings.outputDirectory;
     final notifier = ref.read(homeProvider.notifier);
     final theme = Theme.of(context);
     final colors = theme.colorScheme;
@@ -106,6 +110,7 @@ class HomePage extends ConsumerWidget {
                                 video: video,
                                 format: format,
                                 subtitleLang: subtitleLang,
+                                outputDirectory: outputDir,
                               );
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
@@ -208,6 +213,44 @@ class _UrlInputCard extends StatefulWidget {
 
 class _UrlInputCardState extends State<_UrlInputCard> {
   bool _isExpanded = false;
+  final _urlController = TextEditingController();
+
+  @override
+  void dispose() {
+    _urlController.dispose();
+    super.dispose();
+  }
+
+  void _onUrlChanged(String value) {
+    widget.onChanged(value);
+    setState(() {});
+  }
+
+  Future<void> _pasteFromClipboard() async {
+    final data = await Clipboard.getData(Clipboard.kTextPlain);
+    if (data?.text != null && data!.text!.trim().isNotEmpty) {
+      final url = data.text!.trim();
+      _urlController.text = url;
+      widget.onChanged(url);
+    }
+  }
+
+  void _onFetchPressed() {
+    if (_urlController.text.trim().isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Please paste or type a video URL first.'),
+          behavior: SnackBarBehavior.floating,
+          duration: const Duration(seconds: 2),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      );
+      return;
+    }
+    widget.onFetch?.call();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -252,8 +295,9 @@ class _UrlInputCardState extends State<_UrlInputCard> {
             children: [
               Expanded(
                 child: TextField(
-                  onChanged: widget.onChanged,
-                  onSubmitted: (_) => widget.onFetch?.call(),
+                  controller: _urlController,
+                  onChanged: _onUrlChanged,
+                  onSubmitted: (_) => _onFetchPressed(),
                   style: TextStyle(color: colors.onSurface),
                   decoration: InputDecoration(
                     hintText: 'https://youtube.com/watch?v=...',
@@ -261,6 +305,16 @@ class _UrlInputCardState extends State<_UrlInputCard> {
                         TextStyle(color: colors.onSurfaceVariant.withValues(alpha: 0.6)),
                     prefixIcon: Icon(Icons.link_rounded,
                         color: colors.primary, size: 20),
+                    suffixIcon: _urlController.text.isNotEmpty
+                        ? IconButton(
+                            onPressed: () {
+                              _urlController.clear();
+                              _onUrlChanged('');
+                            },
+                            icon: Icon(Icons.close_rounded,
+                                size: 18, color: colors.onSurfaceVariant),
+                          )
+                        : null,
                     filled: true,
                     fillColor: colors.surfaceContainerHighest,
                     border: OutlineInputBorder(
@@ -277,10 +331,26 @@ class _UrlInputCardState extends State<_UrlInputCard> {
                   ),
                 ),
               ),
+              const SizedBox(width: 8),
+              SizedBox(
+                height: 44,
+                child: IconButton.filled(
+                  tooltip: 'Paste from clipboard',
+                  onPressed: _pasteFromClipboard,
+                  icon: Icon(Icons.content_paste_rounded,
+                      size: 18, color: colors.primary),
+                  style: IconButton.styleFrom(
+                    backgroundColor: colors.surfaceContainerHighest,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                ),
+              ),
               const SizedBox(width: 12),
               _FetchButton(
                 isLoading: widget.isLoading,
-                onPressed: widget.onFetch,
+                onPressed: _onFetchPressed,
                 colors: colors,
               ),
             ],

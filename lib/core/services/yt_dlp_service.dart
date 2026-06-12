@@ -1,48 +1,16 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
+import 'package:flutter/foundation.dart';
 
 import '../../models/video_info.dart';
-import '../utils/platform_utils.dart';
+import '../utils/binary_manager.dart';
 
 class YtDlpService {
-  static String? _ytDlpPath;
+  final _binaryManager = BinaryManager.instance;
 
-  /// Returns the path to the yt-dlp executable, extracting it from assets
-  /// to the app support directory on first call.
-  Future<String> get ytDlpExecutable async {
-    if (_ytDlpPath != null) return _ytDlpPath!;
-
-    final supportDir = await getApplicationSupportDirectory();
-    final binDir = Directory('${supportDir.path}/binaries');
-    if (!binDir.existsSync()) {
-      binDir.createSync(recursive: true);
-    }
-
-    final exeName = PlatformUtils.ytDlpExecutableName;
-    final exePath = '${binDir.path}/$exeName';
-    final exeFile = File(exePath);
-
-    if (!exeFile.existsSync()) {
-      final data = await rootBundle.load(PlatformUtils.ytDlpAssetPath);
-      final bytes = data.buffer.asUint8List();
-      await exeFile.writeAsBytes(bytes, flush: true);
-
-      // Make executable on Linux/macOS
-      if (!Platform.isWindows) {
-        await Process.run('chmod', ['+x', exePath]);
-      }
-    }
-
-    _ytDlpPath = exePath;
-    return exePath;
-  }
-
-  /// Fetches video metadata (including available formats) using --dump-single-json.
   Future<VideoInfo> fetchVideoInfo(String url, {String? cookiesBrowser}) async {
-    final executable = await ytDlpExecutable;
+    final executable = await _binaryManager.ytDlpPath;
 
     final args = [
       '--dump-single-json',
@@ -58,10 +26,7 @@ class YtDlpService {
 
     args.add(url);
 
-    final process = await Process.start(
-      executable,
-      args,
-    );
+    final process = await Process.start(executable, args);
 
     const decoder = Utf8Decoder(allowMalformed: true);
     final outputFuture = process.stdout.transform(decoder).join();
@@ -80,13 +45,10 @@ class YtDlpService {
     }
 
     final json = jsonDecode(output) as Map<String, dynamic>;
-    // ignore: avoid_print
-    print('[yt_dlp_service] subtitles keys: ${(json['subtitles'] as Map<String, dynamic>?)?.keys}');
-    // ignore: avoid_print
-    print('[yt_dlp_service] auto_captions keys: ${(json['automatic_captions'] as Map<String, dynamic>?)?.keys}');
+    debugPrint('[yt_dlp_service] subtitles keys: ${(json['subtitles'] as Map<String, dynamic>?)?.keys}');
+    debugPrint('[yt_dlp_service] auto_captions keys: ${(json['automatic_captions'] as Map<String, dynamic>?)?.keys}');
     final info = VideoInfo.fromJson(json);
-    // ignore: avoid_print
-    print('[yt_dlp_service] subtitleLangs: ${info.subtitleLangs}');
+    debugPrint('[yt_dlp_service] subtitleLangs: ${info.subtitleLangs}');
     return info;
   }
 }

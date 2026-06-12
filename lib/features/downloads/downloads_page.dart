@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/utils/platform_utils.dart';
 import '../../models/download_task.dart';
 import '../../models/download_progress.dart';
 import '../../widgets/app_sidebar.dart';
@@ -132,6 +133,7 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                           itemCount: tasks.length,
                           itemBuilder: (context, index) {
                             final task = tasks[index];
+                            final outputPath = task.outputPath;
                             return _TaskTile(
                               task: task,
                               colors: colors,
@@ -148,6 +150,11 @@ class _DownloadsPageState extends ConsumerState<DownloadsPage> {
                                       DownloadTaskStatus.paused
                                   ? () => notifier.resumeTask(task.id)
                                   : null,
+                              onOpenFolder: task.status ==
+                                                  DownloadTaskStatus.done &&
+                                              outputPath != null
+                                      ? () => PlatformUtils.openContainingFolder(outputPath)
+                                      : null,
                               onRemove: task.status ==
                                               DownloadTaskStatus.done ||
                                           task.status ==
@@ -370,6 +377,7 @@ class _TaskTile extends StatelessWidget {
     this.onResume,
     this.onCancel,
     this.onRemove,
+    this.onOpenFolder,
   });
 
   final DownloadTask task;
@@ -379,6 +387,7 @@ class _TaskTile extends StatelessWidget {
   final VoidCallback? onResume;
   final VoidCallback? onCancel;
   final VoidCallback? onRemove;
+  final VoidCallback? onOpenFolder;
 
   String _formatDuration(int seconds) {
     final d = Duration(seconds: seconds);
@@ -545,6 +554,22 @@ class _TaskTile extends StatelessWidget {
                           style: OutlinedButton.styleFrom(
                             foregroundColor: colors.error,
                             side: BorderSide(color: colors.error.withValues(alpha: 0.5)),
+                            padding: const EdgeInsets.symmetric(horizontal: 8),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (onOpenFolder != null)
+                      SizedBox(
+                        height: 28,
+                        child: TextButton.icon(
+                          onPressed: onOpenFolder,
+                          icon: const Icon(Icons.folder_open_rounded, size: 12),
+                          label: const Text('Folder', style: TextStyle(fontSize: 11)),
+                          style: TextButton.styleFrom(
+                            foregroundColor: colors.primary,
                             padding: const EdgeInsets.symmetric(horizontal: 8),
                             shape: RoundedRectangleBorder(
                               borderRadius: BorderRadius.circular(8),

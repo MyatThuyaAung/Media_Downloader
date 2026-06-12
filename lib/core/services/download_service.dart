@@ -3,21 +3,18 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/services.dart';
-import 'package:path_provider/path_provider.dart';
 
 import '../../models/download_progress.dart';
-import '../utils/platform_utils.dart';
+import '../utils/binary_manager.dart';
 
 class DownloadService {
-  static String? _ytDlpPath;
-  static String? _ffmpegPath;
+  final _binaryManager = BinaryManager.instance;
 
   // ── Per-task phase tracking ────────────────────────────────────────────
   int _streamCount = 0;
   bool _inSubtitlePhase = false;
   bool _inMergerPhase = false;
-  double _mainPercent = 0;
+  double _currentPercent = 0;
   String? _mainSizeLabel;
   String? _mainCurrentSizeLabel;
 
@@ -29,72 +26,24 @@ class DownloadService {
         lower.contains('subtitle');
   }
 
-  /// Returns the path to the yt-dlp executable (shared cache with YtDlpService).
-  Future<String> get ytDlpExecutable async {
-    if (_ytDlpPath != null) return _ytDlpPath!;
-
-    final supportDir = await getApplicationSupportDirectory();
-    final binDir = Directory('${supportDir.path}/binaries');
-    if (!binDir.existsSync()) {
-      binDir.createSync(recursive: true);
-    }
-
-    final exeName = PlatformUtils.ytDlpExecutableName;
-    final exePath = '${binDir.path}/$exeName';
-    final exeFile = File(exePath);
-
-    if (!exeFile.existsSync()) {
-      final data = await rootBundle.load(PlatformUtils.ytDlpAssetPath);
-      final bytes = data.buffer.asUint8List();
-      await exeFile.writeAsBytes(bytes, flush: true);
-
-      if (!Platform.isWindows) {
-        await Process.run('chmod', ['+x', exePath]);
-      }
-    }
-
-    _ytDlpPath = exePath;
-    return exePath;
-  }
-
-  /// Returns the path to the FFmpeg executable, extracting it from assets
-  /// to the app support directory on first call.
-  Future<String> get ffmpegExecutable async {
-    if (_ffmpegPath != null) return _ffmpegPath!;
-
-    final supportDir = await getApplicationSupportDirectory();
-    final binDir = Directory('${supportDir.path}/binaries');
-    if (!binDir.existsSync()) {
-      binDir.createSync(recursive: true);
-    }
-
-    final exeName = PlatformUtils.ffmpegExecutableName;
-    final exePath = '${binDir.path}/$exeName';
-    final exeFile = File(exePath);
-
-    if (!exeFile.existsSync()) {
-      final data = await rootBundle.load(PlatformUtils.ffmpegAssetPath);
-      final bytes = data.buffer.asUint8List();
-      await exeFile.writeAsBytes(bytes, flush: true);
-
-      if (!Platform.isWindows) {
-        await Process.run('chmod', ['+x', exePath]);
-      }
-    }
-
-    _ffmpegPath = exePath;
-    return exePath;
+  /// Computes an overall progress percent that reflects the multi-stream
+  /// nature of yt-dlp downloads (video + audio + subtitles).
+  ///
+  /// Weights are always applied so the overall never drops at stream
+  /// transitions:
+  /// - First stream (video): current * 0.6 → 0–60%
+  /// - Second stream (audio): 60 + current * 0.25 → 60–85%
+  /// - Remaining streams (subtitles etc): 85 + current * 0.15 → 85–100%
+  /// - Merger phase: always 100%
+  double _overallPercent() {
+    if (_inMergerPhase) return 100;
+    if (_inSubtitlePhase) return 85 + _currentPercent * 0.15;
+    if (_streamCount <= 1) return _currentPercent * 0.6;
+    return 60 + _currentPercent * 0.25;
   }
 
   final Map<String, Process> _processes = {};
 
-  /// Downloads a video/audio track and emits [DownloadProgress] events.
-  ///
-  /// [taskId] is used to track this download for cancellation.
-  /// [formatId] is the yt-dlp format id (e.g. "137+140", "bestaudio").
-  /// [outputPath] is the full file path template (yt-dlp -o syntax accepted).
-  /// [resume] when true adds `--continue` to resume a partial download.
-  /// [subtitleLang] language code for subtitles (null = none, 'en' = English).
   Stream<DownloadProgress> download({
     required String taskId,
     required String url,
@@ -135,8 +84,8 @@ class DownloadService {
     Process? process;
 
     try {
-      final executable = await ytDlpExecutable;
-      final ffmpegPath = await ffmpegExecutable;
+      final executable = await _binaryManager.ytDlpPath;
+      final ffmpegPath = await _binaryManager.ffmpegPath;
 
       final args = [
         '-f', formatId,
@@ -177,7 +126,7 @@ class DownloadService {
       _streamCount = 0;
       _inSubtitlePhase = false;
       _inMergerPhase = false;
-      _mainPercent = 0;
+      _currentPercent = 0;
       _mainSizeLabel = null;
       _mainCurrentSizeLabel = null;
 
@@ -201,7 +150,7 @@ class DownloadService {
             if (_isSubtitleDest(dest)) {
               _inSubtitlePhase = true;
               controller.add(DownloadProgress(
-                percent: _mainPercent.clamp(0, 100),
+                percent: _overallPercent().clamp(0, 100),
                 phase: 'Downloading Subtitles',
                 sizeLabel: _mainSizeLabel,
                 currentSizeLabel: _mainCurrentSizeLabel,
@@ -219,9 +168,11 @@ class DownloadService {
           if (line.contains('[Merger]')) {
             _inMergerPhase = true;
             _inSubtitlePhase = false;
-            controller.add(const DownloadProgress(
-              percent: 100,
+            controller.add(DownloadProgress(
+              percent: _overallPercent().clamp(0, 100),
               phase: 'Remuxing...',
+              sizeLabel: _mainSizeLabel,
+              currentSizeLabel: _mainCurrentSizeLabel,
             ));
             return;
           }
@@ -239,7 +190,7 @@ class DownloadService {
 
           if (_inSubtitlePhase || _inMergerPhase || sizeIsKiB) {
             controller.add(DownloadProgress(
-              percent: _mainPercent.clamp(0, 100),
+              percent: _overallPercent().clamp(0, 100),
               phase: _inSubtitlePhase
                   ? 'Downloading Subtitles'
                   : (_inMergerPhase ? 'Remuxing...' : null),
@@ -251,19 +202,18 @@ class DownloadService {
             return;
           }
 
-          if (progress.percent > _mainPercent) {
-            _mainPercent = progress.percent;
+          _currentPercent = progress.percent;
+          _mainSizeLabel ??= progress.sizeLabel;
+          if (progress.sizeLabel != null) {
             _mainSizeLabel = progress.sizeLabel;
             _mainCurrentSizeLabel = progress.currentSizeLabel;
           }
 
           controller.add(DownloadProgress(
-            percent: progress.percent,
-            phase: _streamCount == 0
+            percent: _overallPercent().clamp(0, 100),
+            phase: _streamCount <= 1
                 ? 'Downloading Video'
-                : (_streamCount == 1
-                    ? 'Downloading Video'
-                    : 'Downloading Audio'),
+                : 'Downloading Audio',
             speedLabel: progress.speedLabel,
             etaLabel: progress.etaLabel,
             sizeLabel: progress.sizeLabel,
@@ -279,10 +229,6 @@ class DownloadService {
 
       debugPrint('[download_service] awaiting exit code for $taskId');
 
-      // ── Robust exit-code waiter with timeout ────────────────────
-      // On Windows, process.exitCode may never complete if the process
-      // hangs or the stdout pipe is in a bad state.  We use a short
-      // polling-like approach: a 5-minute timeout, then force-kill.
       int exitCode;
       try {
         exitCode = await process.exitCode.timeout(
@@ -294,7 +240,6 @@ class DownloadService {
           },
         );
       } on TimeoutException {
-        // Safety net: if timeout throws (null onTimeout), kill directly
         process.kill();
         exitCode = -1;
       }
@@ -336,13 +281,11 @@ class DownloadService {
     }
   }
 
-  /// Kills the download process identified by [taskId].
   void cancel(String taskId) {
     _processes[taskId]?.kill();
     _processes.remove(taskId);
   }
 
-  /// Kills all active processes.
   void cancelAll() {
     for (final p in _processes.values) {
       p.kill();

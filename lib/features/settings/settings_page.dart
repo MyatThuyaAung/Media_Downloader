@@ -61,7 +61,7 @@ class SettingsPage extends ConsumerWidget {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     Text(
-                                      'Default Output Directory',
+                                      'Default Download Directory',
                                       style: Theme.of(context)
                                           .textTheme
                                           .titleMedium
