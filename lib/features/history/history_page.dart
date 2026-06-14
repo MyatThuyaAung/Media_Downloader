@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../core/utils/platform_utils.dart';
 import '../../models/download_task.dart';
 import '../../widgets/app_sidebar.dart';
+import '../downloads/download_queue_provider.dart';
 import 'history_provider.dart';
 
 class HistoryPage extends ConsumerWidget {
@@ -14,12 +15,15 @@ class HistoryPage extends ConsumerWidget {
     final state = ref.watch(historyProvider);
     final notifier = ref.read(historyProvider.notifier);
     final colors = Theme.of(context).colorScheme;
+    final queueState = ref.watch(downloadQueueProvider);
+    final activeCount =
+        queueState.tasks.where((t) => t.status != DownloadTaskStatus.done).length;
 
     return Scaffold(
       backgroundColor: colors.surface,
       body: Row(
         children: [
-          AppSidebar(colors: colors),
+          AppSidebar(colors: colors, queuedCount: activeCount),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

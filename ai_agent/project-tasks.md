@@ -1,4 +1,4 @@
-Last updated: 2026-06-12 21:00:00 +06:30
+Last updated: 2026-06-14 21:30:00 +06:30
 
 # Tasks
 
@@ -91,6 +91,25 @@ Last updated: 2026-06-12 21:00:00 +06:30
 ## Completed — Bug Fixes (2026-06-08)
 - [x] Removed `--embed-subs` from `download_service.dart` (confirmed cause of yt-dlp hang during MKV remux)
 - [x] Removed `--remux-video mkv` from `download_service.dart` (redundant with `--merge-output-format mkv`)
+
+## Completed — Deno Auto-Download (2026-06-14)
+- [x] BinaryManager: Deno auto-download (cached → system PATH → GitHub release + zip extraction)
+- [x] PlatformUtils: Deno executable name + download URL for Windows/Linux
+- [x] DownloadService: JS runtime args (`--js-runtimes deno:<path> --remote-components ejs:github`) in `_startDownload()`
+- [x] YtDlpService: JS runtime args in `fetchVideoInfo()` & `fetchPlaylistInfo()`
+- [x] Graceful fallback: args skipped if Deno unavailable (yt-dlp uses deprecated built-in)
+- [x] Init screen for binary extraction on startup
+- [x] PlaylistInfo model for playlist support
+- [x] `flutter analyze` clean (0 errors, 0 warnings)
+
+## Completed — Bug Fixes & Polish Session 2 (2026-06-14)
+- [x] **Pause fix**: `onError`/`onDone` in `download_queue_provider.dart` check `paused` status before calling `_failTask`
+- [x] **Size stability fix**: `_mainSizeLabel`/`_mainCurrentSizeLabel` reset at stream transitions, direct assignment (not `??=`)
+- [x] **Sidebar badges fix**: `history_page.dart` & `settings_page.dart` watch `downloadQueueProvider` for badge count
+- [x] **Progress display fix**: Use `_mainSizeLabel` in emit instead of raw `progress.sizeLabel`
+- [x] **Window jiggling fix**: Progress updates throttled (max 5/sec) + manual `center()` instead of `center: true`
+- [x] All 4 pages now watch `downloadQueueProvider` — throttle prevents excessive rebuilds
+- [x] App running and tested: verified with real downloads (successful exit code 0)
 
 ## Planned — M4 (Linux)
 - [ ] Linux binary bundling

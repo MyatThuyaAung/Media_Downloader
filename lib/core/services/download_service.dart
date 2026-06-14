@@ -107,6 +107,13 @@ class DownloadService {
         args.add('--continue');
       }
 
+      try {
+        final deno = await _binaryManager.denoPath;
+        args.addAll(['--js-runtimes', 'deno:$deno']);
+      } catch (e) {
+        debugPrint('[download_service] Deno not available, skipping JS runtime args: $e');
+      }
+
       if (cookiesBrowser != null &&
           cookiesBrowser.isNotEmpty &&
           cookiesBrowser.toLowerCase() != 'none') {
@@ -147,13 +154,14 @@ class DownloadService {
 
           if (line.contains('[download]') && line.contains('Destination:')) {
             final dest = line.split('Destination:').last.trim();
+            _mainSizeLabel = null;
+            _mainCurrentSizeLabel = null;
+            _currentPercent = 0;
             if (_isSubtitleDest(dest)) {
               _inSubtitlePhase = true;
               controller.add(DownloadProgress(
                 percent: _overallPercent().clamp(0, 100),
                 phase: 'Downloading Subtitles',
-                sizeLabel: _mainSizeLabel,
-                currentSizeLabel: _mainCurrentSizeLabel,
               ));
             } else {
               _inSubtitlePhase = false;
@@ -203,7 +211,6 @@ class DownloadService {
           }
 
           _currentPercent = progress.percent;
-          _mainSizeLabel ??= progress.sizeLabel;
           if (progress.sizeLabel != null) {
             _mainSizeLabel = progress.sizeLabel;
             _mainCurrentSizeLabel = progress.currentSizeLabel;
@@ -216,8 +223,8 @@ class DownloadService {
                 : 'Downloading Audio',
             speedLabel: progress.speedLabel,
             etaLabel: progress.etaLabel,
-            sizeLabel: progress.sizeLabel,
-            currentSizeLabel: progress.currentSizeLabel,
+            sizeLabel: _mainSizeLabel,
+            currentSizeLabel: _mainCurrentSizeLabel,
           ));
         },
       );
@@ -225,7 +232,10 @@ class DownloadService {
       stderrSub = process.stderr
           .transform(decoder)
           .transform(const LineSplitter())
-          .listen((line) => stderrBuffer.writeln(line));
+          .listen((line) {
+        stderrBuffer.writeln(line);
+        debugPrint('[download_service] stderr: $line');
+      });
 
       debugPrint('[download_service] awaiting exit code for $taskId');
 

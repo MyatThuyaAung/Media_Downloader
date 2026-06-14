@@ -1,16 +1,40 @@
-Last updated: 2026-06-12 21:00:00 +06:30
+Last updated: 2026-06-14 21:30:00 +06:30
 
 # Work In Progress
 
-## Status: Linux support implemented
+## Status: Session Wrap-Up
 
-### Recently Done
-- **Extracted ffmpeg** from `ffmpeg_7.1.4-0+deb13u1_amd64.deb` → `assets/binaries/Linux/ffmpeg` (366 KB)
-- **yt-dlp** (Linux binary, 3.2 MB) already at `assets/binaries/Linux/yt-dlp`
-- **pubspec.yaml**: added `assets/binaries/linux/` to asset declarations
-- **No code changes needed**: `PlatformUtils`, `YtDlpService`, `DownloadService` already handle Linux (paths, `chmod +x`)
-- `flutter analyze` — **0 issues found**
+### Session Completed (2026-06-14)
+- Fixed pause bug (onError/onDone check paused status)
+- Fixed progress size instability (reset at stream transitions, direct assignment)
+- Fixed sidebar badges on History & Settings pages
+- Fixed progress display (emit _mainSizeLabel not raw sizeLabel)
+- Fixed window jiggling (progress throttle + manual center())
+- Deno auto-download bundled for JS runtime (resume fix)
+- All fixes tested with real downloads — working
 
 ### Next
-- Build on Linux: `flutter build linux --release` (requires Linux build host)
-- Create `.desktop` file for system integration if distributing
+- Linux Support (M4)
+- Or any new features/improvements you'd like
+
+### Files changed (uncommitted)
+- `lib/app/app.dart` — init screen, app restructuring
+- `lib/core/services/download_service.dart` — size labels, JS runtime args
+- `lib/core/services/yt_dlp_service.dart` — JS runtime args
+- `lib/core/utils/binary_manager.dart` — Deno download
+- `lib/core/utils/platform_utils.dart` — Deno platform info
+- `lib/features/downloads/download_queue_provider.dart` — pause fix, progress throttle
+- `lib/features/history/history_page.dart` — badge count
+- `lib/features/home/home_page.dart` — init integration
+- `lib/features/home/home_provider.dart` — updates
+- `lib/features/home/home_state.dart` — updates
+- `lib/features/settings/settings_page.dart` — badge count
+- `lib/features/init/` — init screen (new)
+- `lib/models/playlist_info.dart` — playlist model (new)
+- `lib/main.dart` — center() fix
+- `pubspec.lock` — deps update
+
+### Uncommitted new files
+- `lib/features/init/init_screen.dart`
+- `lib/features/init/init_provider.dart`
+- `lib/models/playlist_info.dart`

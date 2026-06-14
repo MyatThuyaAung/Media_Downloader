@@ -15,12 +15,12 @@ Future<void> main() async {
   await windowManager.waitUntilReadyToShow(
     const WindowOptions(
       title: 'Media Downloader',
-      center: true,
       minimumSize: Size(1000, 700),
     ),
         () async {
       await windowManager.show();
       await windowManager.focus();
+      await windowManager.center();
     },
   );
 

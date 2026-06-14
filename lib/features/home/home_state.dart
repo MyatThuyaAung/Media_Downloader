@@ -1,3 +1,4 @@
+import '../../models/playlist_info.dart';
 import '../../models/video_info.dart';
 
 // Sentinel to distinguish "not passed" from "explicitly set to null"
@@ -10,6 +11,7 @@ const _undefined = _Undefined();
 class HomeState {
   final String url;
   final VideoInfo? videoInfo;
+  final PlaylistInfo? playlistInfo;
   final bool isLoading;
   final String? error;
   final String? cookiesBrowser;
@@ -18,15 +20,19 @@ class HomeState {
   const HomeState({
     this.url = '',
     this.videoInfo,
+    this.playlistInfo,
     this.isLoading = false,
     this.error,
     this.cookiesBrowser,
     this.subtitleLang,
   });
 
+  bool get isPlaylist => playlistInfo != null;
+
   HomeState copyWith({
     String? url,
-    VideoInfo? videoInfo,
+    Object? videoInfo = _undefined,
+    Object? playlistInfo = _undefined,
     bool? isLoading,
     Object? error = _undefined,
     Object? cookiesBrowser = _undefined,
@@ -34,7 +40,12 @@ class HomeState {
   }) {
     return HomeState(
       url: url ?? this.url,
-      videoInfo: videoInfo ?? this.videoInfo,
+      videoInfo: videoInfo == _undefined
+          ? this.videoInfo
+          : (videoInfo as VideoInfo?),
+      playlistInfo: playlistInfo == _undefined
+          ? this.playlistInfo
+          : (playlistInfo as PlaylistInfo?),
       isLoading: isLoading ?? this.isLoading,
       error: error == _undefined ? this.error : (error as String?),
       cookiesBrowser: cookiesBrowser == _undefined

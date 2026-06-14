@@ -6,7 +6,23 @@ import '../../core/services/yt_dlp_service.dart';
 import '../downloads/download_queue_provider.dart';
 import 'home_state.dart';
 
+final _playlistUrlPattern = RegExp(r'(?:list=|/playlist/|/set/|/album/)', caseSensitive: false);
+final _mixIdPattern = RegExp(r'^RD', caseSensitive: false);
+
 final _ytDlpService = YtDlpService();
+
+String? _extractListId(String url) {
+  try {
+    return Uri.parse(url).queryParameters['list'];
+  } catch (_) {
+    return null;
+  }
+}
+
+bool _isMixUrl(String url) {
+  final listId = _extractListId(url);
+  return listId != null && _mixIdPattern.hasMatch(listId);
+}
 
 final homeProvider = StateNotifierProvider<HomeNotifier, HomeState>(
   (ref) => HomeNotifier(ref),
@@ -40,19 +56,38 @@ class HomeNotifier extends StateNotifier<HomeState> {
   Future<void> fetchVideoInfo() async {
     if (state.url.trim().isEmpty) return;
 
-    state = state.copyWith(isLoading: true, error: null);
+    state = state.copyWith(isLoading: true, error: null, videoInfo: null, playlistInfo: null);
 
     try {
-      final info = await _ytDlpService.fetchVideoInfo(
-        state.url.trim(),
-        cookiesBrowser: state.cookiesBrowser,
-      );
+      final trimmed = state.url.trim();
 
-      state = state.copyWith(
-        isLoading: false,
-        videoInfo: info,
-        error: null,
-      );
+      // Mix URLs (list=RD...) are auto-generated, not user-curated playlists.
+      // Treat them as single-video downloads.
+      final isNonMixPlaylist = _playlistUrlPattern.hasMatch(trimmed) && !_isMixUrl(trimmed);
+
+      if (isNonMixPlaylist) {
+        final playlist = await _ytDlpService.fetchPlaylistInfo(
+          trimmed,
+          cookiesBrowser: state.cookiesBrowser,
+        );
+
+        state = state.copyWith(
+          isLoading: false,
+          playlistInfo: playlist,
+          error: null,
+        );
+      } else {
+        final info = await _ytDlpService.fetchVideoInfo(
+          trimmed,
+          cookiesBrowser: state.cookiesBrowser,
+        );
+
+        state = state.copyWith(
+          isLoading: false,
+          videoInfo: info,
+          error: null,
+        );
+      }
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
     }

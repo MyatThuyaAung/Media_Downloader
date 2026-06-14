@@ -19,6 +19,19 @@ class PlatformUtils {
     return 'assets/binaries/linux/yt-dlp';
   }
 
+  // ── Deno ─────────────────────────────────────────────────────────────────
+
+  static String get denoExecutableName =>
+      _isWindows ? 'deno.exe' : 'deno';
+
+  static String get denoDownloadUrl {
+    if (_isWindows) {
+      return 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-pc-windows-msvc.zip';
+    }
+    // Linux
+    return 'https://github.com/denoland/deno/releases/latest/download/deno-x86_64-unknown-linux-gnu.zip';
+  }
+
   // ── Folder utilities ─────────────────────────────────────────────────────
 
   /// Opens the containing folder of [outputPath] in the system file manager.

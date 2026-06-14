@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
 
+import '../../models/download_task.dart';
 import '../../widgets/app_sidebar.dart';
+import '../downloads/download_queue_provider.dart';
 import 'settings_provider.dart';
 
 class SettingsPage extends ConsumerWidget {
@@ -13,12 +15,15 @@ class SettingsPage extends ConsumerWidget {
     final state = ref.watch(settingsProvider);
     final notifier = ref.read(settingsProvider.notifier);
     final colors = Theme.of(context).colorScheme;
+    final queueState = ref.watch(downloadQueueProvider);
+    final activeCount =
+        queueState.tasks.where((t) => t.status != DownloadTaskStatus.done).length;
 
     return Scaffold(
       backgroundColor: colors.surface,
       body: Row(
         children: [
-          AppSidebar(colors: colors),
+          AppSidebar(colors: colors, queuedCount: activeCount),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.stretch,

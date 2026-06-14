@@ -48,7 +48,12 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   /// yt-dlp process is still running (muxing/converting with ffmpeg).
   final Set<String> _processingTaskIds = {};
 
+  /// Task IDs that should be resumed (passed `--continue` to yt-dlp).
+  final Set<String> _resumeTaskIds = {};
 
+  /// Throttles progress updates to avoid excessive widget rebuilds.
+  /// Keyed by task ID, tracks last UI update time.
+  final Map<String, DateTime> _lastProgressUpdate = {};
 
   Future<void> _init() async {
     final saved = await _queuePersistence.load();
@@ -139,7 +144,8 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
 
     _networkTaskId = task.id;
     _updateTask(task.id, status: DownloadTaskStatus.downloading);
-    _startDownload(task);
+    final resume = _resumeTaskIds.remove(task.id);
+    _startDownload(task, resume: resume);
   }
 
   Future<String> _generateOutputPath(String title) async {
@@ -152,14 +158,16 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
 
   Future<void> _startDownload(DownloadTask task, {bool resume = false}) async {
     // ── Strict guard: never spawn a second process for the same task ──
-    if (task.status != DownloadTaskStatus.queued && !resume) return;
-    if (_networkTaskId != null && _networkTaskId != task.id) return;
     if (_services.containsKey(task.id)) return;
     if (_processingTaskIds.contains(task.id)) return;
+    if (task.status != DownloadTaskStatus.queued && !resume) return;
+    if (_networkTaskId != null && _networkTaskId != task.id) return;
+
+    // Reserve the service slot BEFORE any async gap to prevent duplicate starts
+    final service = DownloadService();
+    _services[task.id] = service;
 
     try {
-      // Mark as downloading immediately (redundant if _processNext already did it,
-      // but acts as a second barrier for direct calls)
       _updateTask(task.id, status: DownloadTaskStatus.downloading);
 
       final outputPath =
@@ -169,16 +177,12 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
         _updateTaskOutputPath(task.id, outputPath);
       }
 
-      // Immediate phase feedback before yt-dlp handshake
       _updateTask(
         task.id,
         progress: DownloadProgress.phase(
           resume ? 'Resuming download...' : 'Starting download...',
         ),
       );
-
-      final service = DownloadService();
-      _services[task.id] = service;
 
       // Append best audio if the selected format is video-only
       final ac = task.format.acodec;
@@ -201,13 +205,14 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
           _onProgress(task.id, progress);
         },
         onError: (Object e) {
-          _failTask(task.id, e.toString());
+          _failUnlessAlreadyTerminal(task.id, e.toString());
         },
         onDone: () {
           try {
             final t = state.tasks.firstWhere((t) => t.id == task.id);
             if (t.status == DownloadTaskStatus.done ||
-                t.status == DownloadTaskStatus.error) {
+                t.status == DownloadTaskStatus.error ||
+                t.status == DownloadTaskStatus.paused) {
               return;
             }
             _failTask(task.id, 'Download stream ended unexpectedly');
@@ -245,7 +250,17 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
       return;
     }
 
-    // Normal numeric progress update
+    // Normal numeric progress update — throttled to avoid jitter
+    final now = DateTime.now();
+    final lastUpdate = _lastProgressUpdate[taskId];
+    if (lastUpdate != null &&
+        now.difference(lastUpdate) < const Duration(milliseconds: 200)) {
+      // Phase transitions and completion always pass through
+      if (progress.phase == null && !progress.isDone) {
+        return;
+      }
+    }
+    _lastProgressUpdate[taskId] = now;
     _updateTask(taskId, progress: progress);
 
     if (progress.isDone) {
@@ -283,6 +298,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   void _finishTask(String taskId) {
     _services.remove(taskId);
     _processingTaskIds.remove(taskId);
+    _resumeTaskIds.remove(taskId);
     if (taskId == _networkTaskId) _networkTaskId = null;
 
     _updateTask(taskId,
@@ -305,6 +321,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   void pauseTask(String taskId) {
     _cancelService(taskId);
     _processingTaskIds.remove(taskId);
+    _resumeTaskIds.remove(taskId);
     if (taskId == _networkTaskId) _networkTaskId = null;
 
     _updateTask(taskId, status: DownloadTaskStatus.paused);
@@ -313,6 +330,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   }
 
   void resumeTask(String taskId) {
+    _resumeTaskIds.add(taskId);
     _updateTask(taskId,
         status: DownloadTaskStatus.queued, errorMessage: null);
     _persistQueue();
@@ -323,6 +341,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     for (final id in _services.keys.toList()) {
       _cancelService(id);
       _processingTaskIds.remove(id);
+      _resumeTaskIds.remove(id);
     }
     _networkTaskId = null;
 
@@ -342,6 +361,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     state = state.copyWith(
       tasks: state.tasks.map((t) {
         if (t.status == DownloadTaskStatus.paused) {
+          _resumeTaskIds.add(t.id);
           return t.copyWith(status: DownloadTaskStatus.queued);
         }
         return t;
@@ -368,6 +388,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
         _processingTaskIds.contains(taskId)) {
       _cancelService(taskId);
       _processingTaskIds.remove(taskId);
+      _resumeTaskIds.remove(taskId);
       if (taskId == _networkTaskId) _networkTaskId = null;
 
       _updateTask(task.id,
@@ -386,6 +407,7 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
   void removeTask(String taskId) {
     _cancelService(taskId);
     _processingTaskIds.remove(taskId);
+    _resumeTaskIds.remove(taskId);
     if (taskId == _networkTaskId) _networkTaskId = null;
 
     state = state.copyWith(
@@ -443,9 +465,24 @@ class DownloadQueueNotifier extends StateNotifier<DownloadQueueState> {
     );
   }
 
+  void _failUnlessAlreadyTerminal(String taskId, String error) {
+    try {
+      final t = state.tasks.firstWhere((t) => t.id == taskId);
+      if (t.status == DownloadTaskStatus.done ||
+          t.status == DownloadTaskStatus.error ||
+          t.status == DownloadTaskStatus.paused) {
+        return;
+      }
+    } catch (_) {
+      return;
+    }
+    _failTask(taskId, error);
+  }
+
   void _failTask(String taskId, String error) {
     _cancelService(taskId);
     _processingTaskIds.remove(taskId);
+    _resumeTaskIds.remove(taskId);
     if (taskId == _networkTaskId) _networkTaskId = null;
 
     _updateTask(taskId, status: DownloadTaskStatus.error, errorMessage: error);
